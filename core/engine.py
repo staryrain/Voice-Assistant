@@ -52,6 +52,7 @@ class AssistantEngine:
         self.state_machine.state_handlers[AssistantState.RECOGNIZING] = self._on_enter_recognizing
         self.state_machine.state_handlers[AssistantState.PROCESSING] = self._on_enter_processing
         self.state_machine.state_handlers[AssistantState.SPEAKING] = self._on_enter_speaking
+        self.state_machine.state_handlers[AssistantState.SINGING] = self._on_enter_singing
         self.state_machine.state_handlers[AssistantState.ERROR] = self._on_enter_error
     
     def _register_core_event_handlers(self):
@@ -78,6 +79,10 @@ class AssistantEngine:
         self.dispatcher.subscribe(EventType.STT_ERROR, self._handle_stt_error)
         self.dispatcher.subscribe(EventType.LLM_RESPONSE_RECEIVED, self._handle_llm_response)
         self.dispatcher.subscribe(EventType.AUDIO_OUTPUT_END, self._handle_audio_output_end)
+        
+        # 音乐事件
+        self.dispatcher.subscribe(EventType.MUSIC_START, self._handle_music_start)
+        self.dispatcher.subscribe(EventType.MUSIC_END, self._handle_music_end)
 
     def _handle_system_start(self, event: Event):
         """处理系统启动事件"""
@@ -102,7 +107,28 @@ class AssistantEngine:
     def _handle_user_activate(self, event: Event):
         """处理用户激活事件"""
         logger.info("用户激活助手")
-        self.state_machine.process_event(event)
+        
+        # 防止重复触发唤醒播放
+        if getattr(self, '_is_waking_up', False) or self.state_machine.current_state not in (AssistantState.IDLE, AssistantState.ERROR):
+            return
+            
+        self._is_waking_up = True
+        
+        # 播放唤醒回复并延迟进入监听状态
+        def _play_wake_response():
+            wake_audio = "test_wakeresponse.mp3"
+            if os.path.exists(wake_audio):
+                try:
+                    logger.info("播放唤醒回复...")
+                    self.player.play(wake_audio)
+                except Exception as e:
+                    logger.error(f"播放唤醒回复失败: {e}")
+            
+            # 播放完毕后（或文件不存在时）再处理事件进入监听状态
+            self._is_waking_up = False
+            self.state_machine.process_event(event)
+            
+        threading.Thread(target=_play_wake_response, daemon=True).start()
     
     def _handle_user_deactivate(self, event: Event):
         """处理用户停用事件"""
@@ -146,8 +172,8 @@ class AssistantEngine:
     def _handle_vad_end(self, event: Event):
         """处理语音活动结束事件"""
         logger.info("检测到语音结束")
-        # 如果当前在说话状态，支持打断
-        if self.state_machine.current_state == AssistantState.SPEAKING:
+        # 如果当前在说话或唱歌状态，支持打断
+        if self.state_machine.current_state in (AssistantState.SPEAKING, AssistantState.SINGING):
             self.dispatcher.publish(create_event(
                 EventType.USER_INTERRUPT,
                 source="engine",
@@ -287,15 +313,75 @@ class AssistantEngine:
     def _handle_llm_response(self, event: Event):
         """处理大模型响应事件"""
         self.state_machine.process_event(event)
+        
+        text = event.data.get("text", "")
+        # 解析是否包含音乐播放指令 [PLAY_MUSIC:歌名]
+        import re
+        match = re.search(r'[\[【]\s*PLAY_MUSIC\s*:\s*(.*?)\s*[\]】]', text)
+        if match:
+            song_name = match.group(1).strip()
+            text = re.sub(r'[\[【]\s*PLAY_MUSIC\s*:\s*.*?\s*[\]】]', '', text).strip()
+            self.pending_music = song_name
+        else:
+            self.pending_music = None
+
         # 触发 TTS
-        self.dispatcher.publish(create_event(
-            EventType.TTS_START,
-            source="engine",
-            data={"text": event.data.get("text")}
-        ))
+        if text:
+            self.dispatcher.publish(create_event(
+                EventType.TTS_START,
+                source="engine",
+                data={"text": text}
+            ))
+        elif self.pending_music:
+            # 如果没有文本直接开始播放音乐
+            self.dispatcher.publish(create_event(
+                EventType.MUSIC_START,
+                source="engine",
+                data={"song": self.pending_music}
+            ))
+            self.pending_music = None
     
     def _handle_audio_output_end(self, event: Event):
         """处理音频输出结束事件"""
+        # 如果有待播放的音乐，触发 MUSIC_START
+        if getattr(self, 'pending_music', None):
+            song = self.pending_music
+            self.pending_music = None
+            self.dispatcher.publish(create_event(
+                EventType.MUSIC_START,
+                source="engine",
+                data={"song": song}
+            ))
+        else:
+            self.state_machine.process_event(event)
+
+    def _handle_music_start(self, event: Event):
+        """处理开始播放音乐"""
+        self.state_machine.process_event(event)
+        song_name = event.data.get("song")
+        # 查找音乐文件（支持当前目录的 mp3）
+        song_path = f"{song_name}.mp3"
+        
+        def _play_music_task():
+            if os.path.exists(song_path):
+                logger.info(f"开始播放音乐: {song_path}")
+                try:
+                    self.player.play(song_path)
+                except Exception as e:
+                    logger.error(f"播放音乐失败: {e}")
+            else:
+                logger.warning(f"未找到音乐文件: {song_path}")
+            
+            # 播放结束或失败，触发 MUSIC_END
+            self.dispatcher.publish(create_event(
+                EventType.MUSIC_END,
+                source="engine"
+            ))
+            
+        threading.Thread(target=_play_music_task, daemon=True).start()
+
+    def _handle_music_end(self, event: Event):
+        """处理音乐播放结束"""
         self.state_machine.process_event(event)
     
     def _on_enter_idle(self):
@@ -383,7 +469,38 @@ class AssistantEngine:
         # 只有在确实是 SPEAKING 状态时才启动打断监听
         if self.state_machine.current_state == AssistantState.SPEAKING:
             threading.Thread(target=_interrupt_listen_task, daemon=True).start()
-    
+
+    def _on_enter_singing(self):
+        """进入唱歌状态"""
+        logger.info("--- 状态切换: SINGING ---")
+        
+        # 在唱歌状态下启动打断监听任务
+        def _interrupt_listen_task():
+            try:
+                # 缩短超时和录音时间，实现快速响应打断
+                record_audio(self.temp_audio_input, timeout=2, phrase_time_limit=3)
+                if os.path.exists(self.temp_audio_input) and self.state_machine.current_state == AssistantState.SINGING:
+                    text = self.stt_client.recognize(self.temp_audio_input)
+                    if text and any(word in text for word in ["停下", "闭嘴", "别说了", "等一下", "打断", "别唱了"]):
+                        logger.info(f"检测到语音打断词: {text}")
+                        # 触发打断事件
+                        self.dispatcher.publish(create_event(
+                            EventType.USER_INTERRUPT,
+                            source="engine",
+                            data={"reason": "voice_interrupt", "text": text}
+                        ))
+                    elif self.state_machine.current_state == AssistantState.SINGING:
+                        # 没听到打断词，如果还在唱歌，继续监听
+                        self._on_enter_singing()
+            except Exception:
+                # 忽略超时，如果还在唱歌状态，继续循环监听
+                if self.state_machine.current_state == AssistantState.SINGING:
+                    self._on_enter_singing()
+                    
+        # 只有在确实是 SINGING 状态时才启动打断监听
+        if self.state_machine.current_state == AssistantState.SINGING:
+            threading.Thread(target=_interrupt_listen_task, daemon=True).start()
+
     def _on_enter_error(self):
         """进入错误状态"""
         logger.info("--- 状态切换: ERROR ---")

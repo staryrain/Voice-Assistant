@@ -26,6 +26,7 @@ class AudioPlayer:
         try:
             logger.info(f"Playing audio: {file_path}")
             pygame.mixer.music.load(file_path)
+            pygame.mixer.music.set_volume(1.0)
             pygame.mixer.music.play()
             
             # 阻塞直到播放结束
