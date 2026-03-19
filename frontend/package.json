@@ -1,0 +1,12 @@
+{
+  "name": "voice-assistant-frontend",
+  "version": "1.0.0",
+  "description": "Voice Assistant Frontend with Electron",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^41.0.3"
+  }
+}

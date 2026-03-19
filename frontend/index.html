@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Voice Assistant</title>
+  <style>
+    body {
+      margin: 0;
+      background: transparent;
+      overflow: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      -webkit-app-region: no-drag; /* We handle drag manually */
+    }
+
+    #pet {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      -webkit-user-drag: none;
+      cursor: grab;
+    }
+    
+    #pet:active {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body>
+  <img id="pet" src="../funingna_skin/idle1.gif" alt="pet" />
+
+  <script src="./renderer.js"></script>
+</body>
+</html>
