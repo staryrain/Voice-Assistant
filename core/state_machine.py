@@ -20,6 +20,9 @@ class AssistantState(Enum):
     # 说话状态：正在播放TTS语音
     SPEAKING = "speaking"
     
+    # 唱歌状态：正在播放音乐
+    SINGING = "singing"
+    
     # 错误状态：处理错误情况
     ERROR = "error"
 
@@ -64,13 +67,21 @@ class StateMachine:
             
             # 从处理状态转换
             Transition(AssistantState.PROCESSING, AssistantState.SPEAKING, EventType.LLM_RESPONSE_RECEIVED),
+            Transition(AssistantState.PROCESSING, AssistantState.SINGING, EventType.MUSIC_START),
             Transition(AssistantState.PROCESSING, AssistantState.LISTENING, EventType.USER_INTERRUPT),
             
             # 从说话状态转换
             Transition(AssistantState.SPEAKING, AssistantState.LISTENING, EventType.AUDIO_OUTPUT_END),
+            Transition(AssistantState.SPEAKING, AssistantState.SINGING, EventType.MUSIC_START), # 可能说话完毕后立刻唱歌
             Transition(AssistantState.SPEAKING, AssistantState.RECOGNIZING, EventType.VAD_START),  # 支持打断
             Transition(AssistantState.SPEAKING, AssistantState.LISTENING, EventType.USER_DEACTIVATE),
             Transition(AssistantState.SPEAKING, AssistantState.LISTENING, EventType.USER_INTERRUPT), # 新增：支持显式打断回到监听
+
+            # 从唱歌状态转换
+            Transition(AssistantState.SINGING, AssistantState.LISTENING, EventType.MUSIC_END),
+            Transition(AssistantState.SINGING, AssistantState.RECOGNIZING, EventType.VAD_START),  # 支持打断
+            Transition(AssistantState.SINGING, AssistantState.LISTENING, EventType.USER_DEACTIVATE),
+            Transition(AssistantState.SINGING, AssistantState.LISTENING, EventType.USER_INTERRUPT),
             
             # 从错误状态转换
             Transition(AssistantState.ERROR, AssistantState.IDLE, EventType.USER_ACTIVATE),
@@ -84,6 +95,7 @@ class StateMachine:
             AssistantState.RECOGNIZING: self._on_enter_recognizing,
             AssistantState.PROCESSING: self._on_enter_processing,
             AssistantState.SPEAKING: self._on_enter_speaking,
+            AssistantState.SINGING: self._on_enter_singing,
             AssistantState.ERROR: self._on_enter_error,
         }
     
@@ -105,6 +117,10 @@ class StateMachine:
     
     def _on_enter_speaking(self):
         """进入说话状态的处理"""
+        pass
+    
+    def _on_enter_singing(self):
+        """进入唱歌状态的处理"""
         pass
     
     def _on_enter_error(self):

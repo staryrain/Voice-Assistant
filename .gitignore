@@ -24,3 +24,9 @@ logs/
 .env
 .env.local
 .env.*.local
+
+# 忽略Node.js模块
+node_modules/
+npm-debug.log
+yarn-error.log
+frontend/node_modules/

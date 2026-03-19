@@ -36,6 +36,10 @@ class EventType(Enum):
     AUDIO_OUTPUT_START = "audio_output_start"
     AUDIO_OUTPUT_END = "audio_output_end"
     
+    # 音乐播放事件
+    MUSIC_START = "music_start"
+    MUSIC_END = "music_end"
+    
     # 用户交互事件
     USER_INTERRUPT = "user_interrupt"
     USER_ACTIVATE = "user_activate"

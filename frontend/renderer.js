@@ -78,9 +78,11 @@ function connectWebSocket() {
           setState("processing");
           break;
         case "audio_output_start":
+        case "music_start":
           setState("speaking");
           break;
         case "audio_output_end":
+        case "music_end":
           setState("idle");
           break;
         case "error":
