@@ -32,6 +32,10 @@ class Transition:
         self.event_type = event_type
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 class StateMachine:
     """语音助手状态机"""
     
@@ -46,11 +50,12 @@ class StateMachine:
         return [
             # 从空闲状态转换
             Transition(AssistantState.IDLE, AssistantState.LISTENING, EventType.USER_ACTIVATE),
-            Transition(AssistantState.IDLE, AssistantState.LISTENING, EventType.SYSTEM_START),
+            # Transition(AssistantState.IDLE, AssistantState.LISTENING, EventType.SYSTEM_START), # 移除：系统启动时不直接进入监听
             
             # 从监听状态转换
             Transition(AssistantState.LISTENING, AssistantState.RECOGNIZING, EventType.VAD_START),
             Transition(AssistantState.LISTENING, AssistantState.IDLE, EventType.USER_DEACTIVATE),
+            Transition(AssistantState.LISTENING, AssistantState.LISTENING, EventType.STT_ERROR), # 录音超时/失败，保持在监听状态
             
             # 从语音识别状态转换
             Transition(AssistantState.RECOGNIZING, AssistantState.PROCESSING, EventType.STT_COMPLETE),
@@ -65,6 +70,7 @@ class StateMachine:
             Transition(AssistantState.SPEAKING, AssistantState.LISTENING, EventType.AUDIO_OUTPUT_END),
             Transition(AssistantState.SPEAKING, AssistantState.RECOGNIZING, EventType.VAD_START),  # 支持打断
             Transition(AssistantState.SPEAKING, AssistantState.LISTENING, EventType.USER_DEACTIVATE),
+            Transition(AssistantState.SPEAKING, AssistantState.LISTENING, EventType.USER_INTERRUPT), # 新增：支持显式打断回到监听
             
             # 从错误状态转换
             Transition(AssistantState.ERROR, AssistantState.IDLE, EventType.USER_ACTIVATE),
@@ -112,8 +118,11 @@ class StateMachine:
             if (transition.from_state == self.current_state and 
                 transition.event_type == event.type):
                 
+                old_state = self.current_state
                 # 执行状态转换
                 self.current_state = transition.to_state
+                
+                logger.info(f"状态转换: {old_state.value} -> {self.current_state.value} (触发事件: {event.type.value})")
                 
                 # 调用状态进入处理函数
                 if self.current_state in self.state_handlers:
@@ -126,6 +135,7 @@ class StateMachine:
                 return True
         
         # 没有找到匹配的转换
+        logger.debug(f"当前状态 {self.current_state.value} 忽略事件 {event.type.value}")
         return False
     
     def register_event_handler(self, event_type: EventType, handler: callable):

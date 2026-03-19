@@ -7,16 +7,36 @@ from .state_machine import StateMachine, AssistantState
 from .dispatcher import EventDispatcher
 
 
+from audio.input.stt import STTClient
+from audio.output.tts import TTSClient
+from audio.output.player import AudioPlayer
+from llm.adapter import LLMClient
+from audio.input.microphone import record_audio
+import os
+import logging
+
+logger = logging.getLogger(__name__)
+
 class AssistantEngine:
     """语音助手核心引擎"""
     
-    def __init__(self, settings: Dict[str, Any]):
-        self.settings = settings
+    def __init__(self, settings: Dict[str, Any] = None):
+        self.settings = settings or {}
         self.state_machine = StateMachine()
         self.dispatcher = EventDispatcher()
         self.running = False
         self.event_loop_thread: Optional[threading.Thread] = None
         self.event_loop: Optional[asyncio.AbstractEventLoop] = None
+        
+        # 初始化客户端
+        self.stt_client = STTClient()
+        self.llm_client = LLMClient()
+        self.tts_client = TTSClient()
+        self.player = AudioPlayer()
+        
+        # 临时文件路径
+        self.temp_audio_input = "temp_input.wav"
+        self.temp_audio_output = "temp_output.mp3"
         
         # 注册状态机事件处理
         self._register_state_event_handlers()
@@ -43,54 +63,221 @@ class AssistantEngine:
         # 用户交互事件
         self.dispatcher.subscribe(EventType.USER_ACTIVATE, self._handle_user_activate)
         self.dispatcher.subscribe(EventType.USER_DEACTIVATE, self._handle_user_deactivate)
+        self.dispatcher.subscribe(EventType.USER_INTERRUPT, self._handle_user_interrupt)
+        
+        # 业务逻辑触发事件
+        self.dispatcher.subscribe(EventType.AUDIO_INPUT_START, self._handle_audio_input_start)
+        self.dispatcher.subscribe(EventType.STT_START, self._handle_stt_start)
+        self.dispatcher.subscribe(EventType.USER_INPUT_RECEIVED, self._handle_user_input_received)
+        self.dispatcher.subscribe(EventType.TTS_START, self._handle_tts_start)
         
         # 音频和语音处理事件
         self.dispatcher.subscribe(EventType.VAD_START, self._handle_vad_start)
         self.dispatcher.subscribe(EventType.VAD_END, self._handle_vad_end)
         self.dispatcher.subscribe(EventType.STT_COMPLETE, self._handle_stt_complete)
+        self.dispatcher.subscribe(EventType.STT_ERROR, self._handle_stt_error)
         self.dispatcher.subscribe(EventType.LLM_RESPONSE_RECEIVED, self._handle_llm_response)
         self.dispatcher.subscribe(EventType.AUDIO_OUTPUT_END, self._handle_audio_output_end)
-    
+
     def _handle_system_start(self, event: Event):
         """处理系统启动事件"""
+        logger.info("系统启动... (进入待机状态)")
         self.running = True
-        self.dispatcher.publish(create_event(
-            EventType.USER_ACTIVATE,
-            source="engine"
-        ))
+        
+        # 系统启动时，手动触发一次 IDLE 的处理逻辑，以启动唤醒词监听
+        self._on_enter_idle()
+        
+        # 移除自动激活，让程序保持在 IDLE 状态
+        # self.dispatcher.publish(create_event(
+        #     EventType.USER_ACTIVATE,
+        #     source="engine"
+        # ))
     
     def _handle_system_shutdown(self, event: Event):
         """处理系统关闭事件"""
+        logger.info("系统关闭...")
         self.running = False
-        self.stop()
+        # self.stop() # 避免递归调用
     
     def _handle_user_activate(self, event: Event):
         """处理用户激活事件"""
+        logger.info("用户激活助手")
         self.state_machine.process_event(event)
     
     def _handle_user_deactivate(self, event: Event):
         """处理用户停用事件"""
+        logger.info("用户停用助手")
         self.state_machine.process_event(event)
+
+    def _handle_user_interrupt(self, event: Event):
+        """处理用户打断事件"""
+        logger.info("用户打断")
+        self.state_machine.process_event(event)
+        # 停止播放
+        import pygame
+        if pygame.mixer.get_init():
+            pygame.mixer.music.stop()
+            
+        # 如果是语音打断，我们可以选择让大模型做出回应
+        reason = event.data.get("reason") if event.data else None
+        if reason == "voice_interrupt":
+            interrupt_text = event.data.get("text", "停下")
+            logger.info(f"处理语音打断回应: {interrupt_text}")
+            
+            # 告诉大模型被用户打断了，并请求一个简短的回应
+            def _interrupt_reply_task():
+                reply = self.llm_client.chat(f"[系统提示: 用户打断了你的发言，用户说：'{interrupt_text}'。请简短地回应，例如：'好的，我停下了' 或 '好的，有什么新问题吗？']")
+                logger.info(f"打断回应: {reply}")
+                
+                # 再次触发 TTS 播放简短的回应，然后系统会回到 LISTENING
+                self.dispatcher.publish(create_event(
+                    EventType.TTS_START,
+                    source="engine",
+                    data={"text": reply}
+                ))
+                
+            threading.Thread(target=_interrupt_reply_task, daemon=True).start()
     
     def _handle_vad_start(self, event: Event):
         """处理语音活动开始事件"""
+        logger.info("检测到语音开始...")
         self.state_machine.process_event(event)
     
     def _handle_vad_end(self, event: Event):
         """处理语音活动结束事件"""
+        logger.info("检测到语音结束")
         # 如果当前在说话状态，支持打断
         if self.state_machine.current_state == AssistantState.SPEAKING:
-            # 发布打断事件
             self.dispatcher.publish(create_event(
                 EventType.USER_INTERRUPT,
                 source="engine",
                 data={"reason": "vad_detected"}
             ))
     
+    def _handle_audio_input_start(self, event: Event):
+        """开始录音"""
+        def _record_task():
+            try:
+                # 记录监听开始的时间，用于超时判断
+                if not hasattr(self, 'listening_start_time'):
+                    self.listening_start_time = time.time()
+                
+                # 检查是否在 LISTENING 状态超过一分钟 (60秒)
+                if time.time() - self.listening_start_time > 60:
+                    logger.info("长时间未检测到语音，自动返回待机状态...")
+                    self.dispatcher.publish(create_event(
+                        EventType.USER_DEACTIVATE,
+                        source="engine"
+                    ))
+                    # 重置时间，防止下次误判
+                    delattr(self, 'listening_start_time')
+                    return
+
+                # logger.info("正在录音...") # 避免刷屏，可以注释或改为 debug
+                
+                # 模拟 VAD，使用较短的 timeout 避免长时间阻塞
+                # 如果用户没说话，抛出 WaitTimeoutError，被捕获后重新触发 STT_ERROR
+                record_audio(self.temp_audio_input, timeout=5, phrase_time_limit=5)
+                
+                if os.path.exists(self.temp_audio_input):
+                    # 检测到有效语音，重置计时器
+                    if hasattr(self, 'listening_start_time'):
+                        delattr(self, 'listening_start_time')
+                    
+                    self.dispatcher.publish(create_event(
+                        EventType.VAD_START,
+                        source="engine"
+                    ))
+            except Exception as e:
+                # 屏蔽超时错误日志，让它安静地循环
+                if "timeout" not in str(e).lower() and "failed after all retries" not in str(e).lower():
+                    logger.error(f"录音异常: {e}")
+                
+                # 发送事件让状态机重新回到 LISTENING
+                self.dispatcher.publish(create_event(
+                    EventType.STT_ERROR,
+                    source="engine"
+                ))
+        
+        threading.Thread(target=_record_task, daemon=True).start()
+
+    def _handle_stt_error(self, event: Event):
+        """处理识别/录音错误事件"""
+        self.state_machine.process_event(event)
+
+    def _handle_stt_start(self, event: Event):
+        """开始语音转文字"""
+        def _stt_task():
+            logger.info("正在识别语音...")
+            text = self.stt_client.recognize(self.temp_audio_input)
+            if text:
+                logger.info(f"识别结果: {text}")
+                self.dispatcher.publish(create_event(
+                    EventType.STT_COMPLETE,
+                    source="engine",
+                    data={"text": text}
+                ))
+            else:
+                logger.warning("未能识别语音")
+                self.dispatcher.publish(create_event(
+                    EventType.STT_ERROR,
+                    source="engine"
+                ))
+        
+        threading.Thread(target=_stt_task, daemon=True).start()
+
+    def _handle_user_input_received(self, event: Event):
+        """处理接收到的用户文本"""
+        text = event.data.get("text")
+        def _llm_task():
+            logger.info(f"正在请求 LLM: {text}")
+            reply = self.llm_client.chat(text)
+            logger.info(f"LLM 回复: {reply}")
+            self.dispatcher.publish(create_event(
+                EventType.LLM_RESPONSE_RECEIVED,
+                source="engine",
+                data={"text": reply}
+            ))
+        
+        threading.Thread(target=_llm_task, daemon=True).start()
+
+    def _handle_tts_start(self, event: Event):
+        """开始文字转语音并播放"""
+        text = event.data.get("text") if event.data else None
+        if not text and self.state_machine.current_state == AssistantState.SPEAKING:
+            # 如果没有传 text，可能是状态机触发的，需要从某处获取回复内容
+            # 这里简单处理，假设数据已经在事件流中传递
+            return
+
+        def _tts_play_task():
+            logger.info("正在合成语音并播放...")
+            # 注意：TTSClient._synthesize_async 是异步的
+            # 这里为了简化，我们先直接在当前线程运行它（如果可能）或者使用事件循环
+            if self.event_loop:
+                future = asyncio.run_coroutine_threadsafe(
+                    self.tts_client._synthesize_async(text, self.temp_audio_output),
+                    self.event_loop
+                )
+                try:
+                    future.result() # 等待合成完成
+                    self.player.play(self.temp_audio_output)
+                    self.dispatcher.publish(create_event(
+                        EventType.AUDIO_OUTPUT_END,
+                        source="engine"
+                    ))
+                except Exception as e:
+                    logger.error(f"TTS 或播放错误: {e}")
+                    self.dispatcher.publish(create_event(
+                        EventType.AUDIO_OUTPUT_END, # 即使出错也尝试回到监听状态
+                        source="engine"
+                    ))
+        
+        threading.Thread(target=_tts_play_task, daemon=True).start()
+
     def _handle_stt_complete(self, event: Event):
         """处理语音识别完成事件"""
         self.state_machine.process_event(event)
-        # 发布用户输入接收事件
+        # 发布用户输入接收事件，触发 LLM
         self.dispatcher.publish(create_event(
             EventType.USER_INPUT_RECEIVED,
             source="engine",
@@ -100,6 +287,12 @@ class AssistantEngine:
     def _handle_llm_response(self, event: Event):
         """处理大模型响应事件"""
         self.state_machine.process_event(event)
+        # 触发 TTS
+        self.dispatcher.publish(create_event(
+            EventType.TTS_START,
+            source="engine",
+            data={"text": event.data.get("text")}
+        ))
     
     def _handle_audio_output_end(self, event: Event):
         """处理音频输出结束事件"""
@@ -107,13 +300,42 @@ class AssistantEngine:
     
     def _on_enter_idle(self):
         """进入空闲状态"""
-        self.dispatcher.publish(create_event(
-            EventType.SYSTEM_SHUTDOWN,
-            source="state_machine"
-        ))
+        logger.info("--- 状态切换: IDLE ---")
+        if hasattr(self, 'listening_start_time'):
+            delattr(self, 'listening_start_time')
+        
+        # 在 IDLE 状态下启动轻量级的唤醒词监听
+        def _wake_word_task():
+            try:
+                # logger.info("正在监听唤醒词...")
+                # 使用较短的超时时间，不断循环监听唤醒词
+                record_audio(self.temp_audio_input, timeout=3, phrase_time_limit=3)
+                
+                if os.path.exists(self.temp_audio_input):
+                    # 识别是否包含唤醒词 (这里使用现有的 STT 替代专用的唤醒词模型，仅作演示)
+                    text = self.stt_client.recognize(self.temp_audio_input)
+                    if text and ("芙宁娜" in text or "唤醒" in text):
+                        logger.info(f"检测到唤醒词: {text}")
+                        self.dispatcher.publish(create_event(
+                            EventType.USER_ACTIVATE,
+                            source="engine"
+                        ))
+                    else:
+                        # 没检测到唤醒词，如果还在 IDLE 状态，继续监听
+                        if self.state_machine.current_state == AssistantState.IDLE:
+                            self._on_enter_idle()
+            except Exception as e:
+                # 忽略超时错误，继续循环
+                if self.state_machine.current_state == AssistantState.IDLE:
+                    self._on_enter_idle()
+                    
+        # 只有在确实是 IDLE 状态时才启动监听
+        if self.state_machine.current_state == AssistantState.IDLE:
+            threading.Thread(target=_wake_word_task, daemon=True).start()
     
     def _on_enter_listening(self):
         """进入监听状态"""
+        logger.info("--- 状态切换: LISTENING ---")
         self.dispatcher.publish(create_event(
             EventType.AUDIO_INPUT_START,
             source="state_machine"
@@ -121,6 +343,7 @@ class AssistantEngine:
     
     def _on_enter_recognizing(self):
         """进入语音识别状态"""
+        logger.info("--- 状态切换: RECOGNIZING ---")
         self.dispatcher.publish(create_event(
             EventType.STT_START,
             source="state_machine"
@@ -128,18 +351,42 @@ class AssistantEngine:
     
     def _on_enter_processing(self):
         """进入处理状态"""
-        pass  # 由具体的事件处理函数处理
+        logger.info("--- 状态切换: PROCESSING ---")
     
     def _on_enter_speaking(self):
         """进入说话状态"""
-        self.dispatcher.publish(create_event(
-            EventType.TTS_START,
-            source="state_machine"
-        ))
+        logger.info("--- 状态切换: SPEAKING ---")
+        
+        # 在说话状态下启动打断监听任务
+        def _interrupt_listen_task():
+            try:
+                # 缩短超时和录音时间，实现快速响应打断
+                record_audio(self.temp_audio_input, timeout=2, phrase_time_limit=3)
+                if os.path.exists(self.temp_audio_input) and self.state_machine.current_state == AssistantState.SPEAKING:
+                    text = self.stt_client.recognize(self.temp_audio_input)
+                    if text and any(word in text for word in ["停下", "闭嘴", "别说了", "等一下", "打断"]):
+                        logger.info(f"检测到语音打断词: {text}")
+                        # 触发打断事件
+                        self.dispatcher.publish(create_event(
+                            EventType.USER_INTERRUPT,
+                            source="engine",
+                            data={"reason": "voice_interrupt", "text": text}
+                        ))
+                    elif self.state_machine.current_state == AssistantState.SPEAKING:
+                        # 没听到打断词，如果还在说话，继续监听
+                        self._on_enter_speaking()
+            except Exception:
+                # 忽略超时，如果还在说话状态，继续循环监听
+                if self.state_machine.current_state == AssistantState.SPEAKING:
+                    self._on_enter_speaking()
+                    
+        # 只有在确实是 SPEAKING 状态时才启动打断监听
+        if self.state_machine.current_state == AssistantState.SPEAKING:
+            threading.Thread(target=_interrupt_listen_task, daemon=True).start()
     
     def _on_enter_error(self):
         """进入错误状态"""
-        pass
+        logger.info("--- 状态切换: ERROR ---")
     
     def start(self):
         """启动引擎"""
