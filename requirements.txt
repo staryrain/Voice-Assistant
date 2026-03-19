@@ -1,0 +1,35 @@
+# Audio processing
+pyaudio
+pydub==0.25.1
+
+# Speech Recognition
+SpeechRecognition==3.10.4
+
+# Text-to-Speech
+pyttsx3==2.90
+gTTS==2.5.1
+pygame==2.6.1
+
+# Networking
+aiohttp==3.9.1
+websockets==12.0
+
+# LLM Integration
+openai==1.45.0
+anthropic==0.35.0
+
+# UI Framework
+# PyQt6==6.7.0
+
+# Configuration
+pyyaml==6.0.2
+
+# Database
+SQLAlchemy==2.0.35
+
+# Utilities
+python-dotenv==1.0.1
+python-dateutil==2.9.0.post0
+
+# Testing
+pytest==8.3.3
