@@ -30,7 +30,8 @@ async def broadcast_event(event):
         
     msg = {
         "type": event.type.value,
-        "data": event.data or {}
+        "data": event.data or {},
+        "state": engine.get_current_state().value if engine else None
     }
     
     msg_str = json.dumps(msg)
@@ -56,7 +57,8 @@ async def ws_handler(websocket):
     try:
         await websocket.send(json.dumps({
             "type": "system_start",
-            "data": {"status": "ready"}
+            "data": {"status": "ready"},
+            "state": engine.get_current_state().value if engine else None
         }))
         
         # 持续监听前端发来的指令

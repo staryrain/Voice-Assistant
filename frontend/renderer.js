@@ -19,6 +19,20 @@ let currentState = 'idle';
 let idleInterval = null;
 
 const petImg = document.getElementById("pet");
+const debugPanel = document.getElementById("debug-panel");
+let lastBackendState = null;
+let lastEventType = null;
+
+function updateDebugPanel() {
+  if (!debugPanel) return;
+  const mismatch = lastBackendState && lastBackendState !== currentState;
+  debugPanel.textContent = [
+    `FSM: ${lastBackendState ?? "-"}`,
+    `Anim: ${currentState}`,
+    `Event: ${lastEventType ?? "-"}`,
+    `Mismatch: ${mismatch ? "YES" : "NO"}`
+  ].join("\n");
+}
 
 // 状态设置函数
 function setState(state) {
@@ -34,6 +48,8 @@ function setState(state) {
   } else {
     petImg.src = animations[state] || animations["idle"][0];
   }
+
+  updateDebugPanel();
 }
 
 // 播放随机的 Idle 动画
@@ -45,6 +61,7 @@ function playRandomIdle() {
 
 // 初始化状态
 setState('idle');
+updateDebugPanel();
 
 // ================= WebSocket 通信 =================
 function connectWebSocket() {
@@ -52,12 +69,16 @@ function connectWebSocket() {
 
   ws.onopen = () => {
     console.log("WebSocket connected to backend");
+    lastEventType = "ws_open";
+    updateDebugPanel();
   };
 
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
       console.log("Received event:", msg);
+      lastEventType = msg.type ?? null;
+      lastBackendState = msg.state ?? null;
       
       // 根据后端的事件类型映射到前端的动画状态
       switch (msg.type) {
@@ -92,6 +113,8 @@ function connectWebSocket() {
         default:
           break;
       }
+
+      updateDebugPanel();
     } catch (err) {
       console.error("Error parsing message:", err);
     }
@@ -99,11 +122,15 @@ function connectWebSocket() {
 
   ws.onclose = () => {
     console.log("WebSocket disconnected. Reconnecting in 3 seconds...");
+    lastEventType = "ws_close";
+    updateDebugPanel();
     setTimeout(connectWebSocket, 3000);
   };
 
   ws.onerror = (err) => {
     console.error("WebSocket error:", err);
+    lastEventType = "ws_error";
+    updateDebugPanel();
   };
 }
 

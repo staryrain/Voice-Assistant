@@ -13,6 +13,7 @@
       align-items: center;
       height: 100vh;
       -webkit-app-region: no-drag; /* We handle drag manually */
+      position: relative;
     }
 
     #pet {
@@ -26,9 +27,26 @@
     #pet:active {
       cursor: grabbing;
     }
+
+    #debug-panel {
+      position: fixed;
+      left: 10px;
+      top: 10px;
+      z-index: 9999;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.55);
+      color: #fff;
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      white-space: pre;
+      pointer-events: none;
+      user-select: none;
+      max-width: calc(100vw - 20px);
+    }
   </style>
 </head>
 <body>
+  <div id="debug-panel"></div>
   <img id="pet" src="../funingna_skin/idle1.gif" alt="pet" />
 
   <script src="./renderer.js"></script>
