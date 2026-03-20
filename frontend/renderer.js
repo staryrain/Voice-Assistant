@@ -11,6 +11,7 @@ const animations = {
   recognizing: "../funingna_skin/thinking.gif",
   processing: "../funingna_skin/thinking.gif",
   speaking: "../funingna_skin/talk.gif",
+  singing: "../funingna_skin/talk.gif",
   error: "../funingna_skin/error.gif"
 };
 
@@ -22,6 +23,27 @@ const petImg = document.getElementById("pet");
 const debugPanel = document.getElementById("debug-panel");
 let lastBackendState = null;
 let lastEventType = null;
+
+function backendStateToAnimState(state) {
+  switch (state) {
+    case "idle":
+      return "idle";
+    case "listening":
+      return "listening";
+    case "recognizing":
+      return "recognizing";
+    case "processing":
+      return "processing";
+    case "speaking":
+      return "speaking";
+    case "singing":
+      return "singing";
+    case "error":
+      return "error";
+    default:
+      return null;
+  }
+}
 
 function updateDebugPanel() {
   if (!debugPanel) return;
@@ -79,6 +101,13 @@ function connectWebSocket() {
       console.log("Received event:", msg);
       lastEventType = msg.type ?? null;
       lastBackendState = msg.state ?? null;
+
+      const animState = backendStateToAnimState(lastBackendState);
+      if (animState) {
+        setState(animState);
+        updateDebugPanel();
+        return;
+      }
       
       // 根据后端的事件类型映射到前端的动画状态
       switch (msg.type) {

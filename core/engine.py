@@ -286,6 +286,10 @@ class AssistantEngine:
                 )
                 try:
                     future.result() # 等待合成完成
+                    self.dispatcher.publish(create_event(
+                        EventType.AUDIO_OUTPUT_START,
+                        source="engine"
+                    ))
                     self.player.play(self.temp_audio_output)
                     self.dispatcher.publish(create_event(
                         EventType.AUDIO_OUTPUT_END,
@@ -366,6 +370,11 @@ class AssistantEngine:
             if os.path.exists(song_path):
                 logger.info(f"开始播放音乐: {song_path}")
                 try:
+                    self.dispatcher.publish(create_event(
+                        EventType.AUDIO_OUTPUT_START,
+                        source="engine",
+                        data={"song": song_name}
+                    ))
                     self.player.play(song_path)
                 except Exception as e:
                     logger.error(f"播放音乐失败: {e}")
