@@ -1,0 +1,25 @@
+stt:
+  app_key: "2078616776"
+  access_key: "7KpKwBDOlRBlEXB6sbcIyhJa-01pUa-U"
+  url: "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
+  segment_duration: 200
+
+tts:
+  mode: "server"
+  server:
+    appid: "1972357714"
+    token: "jhG-6VnZk0h4EAhD9CekJRo8OpVSLFkd"
+    cluster: "volcano_icl"
+    voice_type: "S_FwdJnJNN1"
+    host: "openspeech.bytedance.com"
+    url: "wss://openspeech.bytedance.com/api/v1/tts/ws_binary"
+  local:
+    engine: "pyttsx3"
+    voice_id: ""
+    rate: 150
+    volume: 1.0
+
+llm:
+  base_url: "https://ark.cn-beijing.volces.com/api/v3"
+  api_key: "b6ef068e-6ae9-47f8-85d5-2ac15bf0860a"
+  model: "doubao-1-5-pro-32k-250115"

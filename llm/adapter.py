@@ -1,17 +1,32 @@
 import os
 import logging
+import yaml
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
+def _load_config() -> dict:
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config", "settings.yaml")
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        logger.warning(f"Failed to load config: {e}, using empty config")
+        return {}
+
+_config = _load_config()
+
 class LLMClient:
     def __init__(self):
-        # Initialize the OpenAI client with Ark API settings
+        llm_config = _config.get("llm", {})
+        base_url = llm_config.get("base_url", "")
+        api_key = llm_config.get("api_key", "")
+        
         self.client = OpenAI(
-            base_url="https://ark.cn-beijing.volces.com/api/v3",
-            api_key=os.environ.get("ARK_API_KEY", "b6ef068e-6ae9-47f8-85d5-2ac15bf0860a")
+            base_url=base_url,
+            api_key=os.environ.get("ARK_API_KEY", api_key)
         )
-        self.model = "doubao-1-5-pro-32k-250115"
+        self.model = llm_config.get("model", "")
         self.messages = []
         self._load_persona()
 

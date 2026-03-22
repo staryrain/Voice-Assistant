@@ -9,9 +9,20 @@ import os
 import subprocess
 import tempfile
 from typing import Optional, List, Dict, Any, Tuple
+import yaml
 
-# 配置日志
 logger = logging.getLogger(__name__)
+
+def _load_config() -> Dict[str, Any]:
+    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config", "settings.yaml")
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        logger.warning(f"Failed to load config: {e}, using empty config")
+        return {}
+
+_config = _load_config()
 
 # 常量定义
 DEFAULT_SAMPLE_RATE = 16000
@@ -95,10 +106,11 @@ class STTClient:
     适配 main.py 的语音转文字客户端
     """
     def __init__(self):
-        self.app_key = "2078616776"
-        self.access_key = "7KpKwBDOlRBlEXB6sbcIyhJa-01pUa-U"
-        self.url = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_nostream"
-        self.segment_duration = 200
+        stt_config = _config.get("stt", {})
+        self.app_key = stt_config.get("app_key", "")
+        self.access_key = stt_config.get("access_key", "")
+        self.url = stt_config.get("url", "")
+        self.segment_duration = stt_config.get("segment_duration", 200)
 
     def recognize(self, file_path: str) -> str:
         """
