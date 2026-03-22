@@ -188,8 +188,8 @@ class AssistantEngine:
                 if not hasattr(self, 'listening_start_time'):
                     self.listening_start_time = time.time()
                 
-                # 检查是否在 LISTENING 状态超过一分钟 (60秒)
-                if time.time() - self.listening_start_time > 60:
+                # 检查是否在 LISTENING 状态超过半分钟 (30秒)
+                if time.time() - self.listening_start_time > 30:
                     logger.info("长时间未检测到语音，自动返回待机状态...")
                     self.dispatcher.publish(create_event(
                         EventType.USER_DEACTIVATE,
@@ -316,11 +316,22 @@ class AssistantEngine:
     
     def _handle_llm_response(self, event: Event):
         """处理大模型响应事件"""
+        import re
+        text = event.data.get("text", "") if event.data else ""
+
+        if re.search(r'[\[【]\s*休息\s*[\]】]', text):
+            self.pending_music = None
+            self.state_machine.set_state(AssistantState.IDLE)
+            self.dispatcher.publish(create_event(
+                EventType.USER_DEACTIVATE,
+                source="engine",
+                data={"reason": "rest"}
+            ))
+            return
+
         self.state_machine.process_event(event)
         
-        text = event.data.get("text", "")
         # 解析是否包含音乐播放指令 [PLAY_MUSIC:歌名]
-        import re
         match = re.search(r'[\[【]\s*PLAY_MUSIC\s*:\s*(.*?)\s*[\]】]', text)
         if match:
             song_name = match.group(1).strip()
