@@ -43,11 +43,173 @@
       user-select: none;
       max-width: calc(100vw - 20px);
     }
+
+    /* 文本模式 UI */
+    #text-mode-container {
+      display: none;
+      width: 100%;
+      height: 100%;
+      background: #f5f5f5;
+      flex-direction: column;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 0 10px rgba(0,0,0,0.2);
+      -webkit-app-region: no-drag;
+    }
+    
+    #text-header {
+      height: 40px;
+      background: #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 10px;
+      -webkit-app-region: drag;
+    }
+    
+    #text-title {
+      font-family: sans-serif;
+      font-size: 14px;
+      color: #333;
+    }
+    
+    #close-text-btn {
+      cursor: pointer;
+      font-size: 20px;
+      color: #666;
+      -webkit-app-region: no-drag;
+    }
+    
+    #chat-messages {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    .message {
+      display: flex;
+      max-width: 90%;
+    }
+    
+    .message.user {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+    
+    .message.llm {
+      align-self: flex-start;
+    }
+    
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #ccc;
+      flex-shrink: 0;
+      object-fit: cover;
+    }
+    
+    .message.user .avatar {
+      margin-left: 10px;
+      background: #fff;
+      border: 1px solid #ddd;
+    }
+    
+    .message.llm .avatar {
+      margin-right: 10px;
+    }
+    
+    .bubble {
+      background: #fff;
+      padding: 10px;
+      border-radius: 10px;
+      font-family: sans-serif;
+      font-size: 14px;
+      line-height: 1.4;
+      word-break: break-word;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .message.user .bubble {
+      background: #95ec69;
+    }
+    
+    #input-area {
+      height: 60px;
+      background: #fff;
+      display: flex;
+      padding: 10px;
+      box-sizing: border-box;
+      border-top: 1px solid #eee;
+    }
+    
+    #text-input {
+      flex: 1;
+      border: none;
+      outline: none;
+      resize: none;
+      font-family: sans-serif;
+      font-size: 14px;
+      padding: 5px;
+    }
+    
+    #send-btn {
+      width: 60px;
+      background: #0099ff;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-left: 10px;
+      font-family: sans-serif;
+    }
+
+    /* 右键菜单 */
+    #context-menu {
+      display: none;
+      position: absolute;
+      background: #fff;
+      border: 1px solid #ccc;
+      box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+      border-radius: 4px;
+      z-index: 10000;
+      padding: 5px 0;
+      font-family: sans-serif;
+      font-size: 14px;
+    }
+    
+    .menu-item {
+      padding: 8px 20px;
+      cursor: pointer;
+    }
+    
+    .menu-item:hover {
+      background: #f0f0f0;
+    }
   </style>
 </head>
 <body>
   <div id="debug-panel"></div>
   <img id="pet" src="../funingna_skin/idle1.gif" alt="pet" />
+
+  <div id="text-mode-container">
+    <div id="text-header">
+      <div id="text-title">文本模式</div>
+      <div id="close-text-btn">×</div>
+    </div>
+    <div id="chat-messages"></div>
+    <div id="input-area">
+      <textarea id="text-input" placeholder="输入消息..."></textarea>
+      <button id="send-btn">发送</button>
+    </div>
+  </div>
+
+  <div id="context-menu">
+    <div class="menu-item" id="menu-text-mode">文本模式</div>
+  </div>
 
   <script src="./renderer.js"></script>
 </body>

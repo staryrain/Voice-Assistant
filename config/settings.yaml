@@ -20,7 +20,7 @@ tts:
     language: "多语种混合"
 
 llm:
-  mode: "local" # 可选: "server" 或 "local"
+  mode: "server" # 可选: "server" 或 "local"
   server:
     base_url: "https://ark.cn-beijing.volces.com/api/v3"
     api_key: "b6ef068e-6ae9-47f8-85d5-2ac15bf0860a"

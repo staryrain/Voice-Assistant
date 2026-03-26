@@ -53,12 +53,14 @@ class StateMachine:
         return [
             # 从空闲状态转换
             Transition(AssistantState.IDLE, AssistantState.LISTENING, EventType.USER_ACTIVATE),
+            Transition(AssistantState.IDLE, AssistantState.PROCESSING, EventType.USER_INPUT_RECEIVED),
             # Transition(AssistantState.IDLE, AssistantState.LISTENING, EventType.SYSTEM_START), # 移除：系统启动时不直接进入监听
             
             # 从监听状态转换
             Transition(AssistantState.LISTENING, AssistantState.RECOGNIZING, EventType.VAD_START),
             Transition(AssistantState.LISTENING, AssistantState.IDLE, EventType.USER_DEACTIVATE),
             Transition(AssistantState.LISTENING, AssistantState.LISTENING, EventType.STT_ERROR), # 录音超时/失败，保持在监听状态
+            Transition(AssistantState.LISTENING, AssistantState.PROCESSING, EventType.USER_INPUT_RECEIVED),
             
             # 从语音识别状态转换
             Transition(AssistantState.RECOGNIZING, AssistantState.PROCESSING, EventType.STT_COMPLETE),
@@ -69,6 +71,7 @@ class StateMachine:
             Transition(AssistantState.PROCESSING, AssistantState.SPEAKING, EventType.LLM_RESPONSE_RECEIVED),
             Transition(AssistantState.PROCESSING, AssistantState.SINGING, EventType.MUSIC_START),
             Transition(AssistantState.PROCESSING, AssistantState.LISTENING, EventType.USER_INTERRUPT),
+            Transition(AssistantState.PROCESSING, AssistantState.IDLE, EventType.AUDIO_OUTPUT_END), # 文本模式直接跳过SPEAKING回到IDLE
             
             # 从说话状态转换
             Transition(AssistantState.SPEAKING, AssistantState.LISTENING, EventType.AUDIO_OUTPUT_END),

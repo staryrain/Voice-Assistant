@@ -27,6 +27,10 @@ function createWindow() {
   mainWindow.on('closed', function () {
     mainWindow = null;
   });
+
+  ipcMain.on('resize-window', (event, width, height) => {
+    mainWindow.setSize(width, height);
+  });
 }
 
 app.whenReady().then(createWindow);

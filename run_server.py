@@ -15,7 +15,7 @@ import websockets
 sys.path.insert(0, str(Path(__file__).parent))
 
 from core.engine import AssistantEngine
-from core.events import EventType
+from core.events import EventType, create_event
 from utils.logger import setup_logger
 
 # 全局变量
@@ -72,6 +72,17 @@ async def ws_handler(websocket):
                     engine.activate()
                 elif msg_type == "user_interrupt" and engine:
                     engine.interrupt()
+                elif msg_type == "user_text_input" and engine:
+                    text = data.get("data", {}).get("text")
+                    if text:
+                        # 标记当前是通过纯文本模式输入的
+                        engine.current_mode = "text"
+                        event = create_event(EventType.USER_INPUT_RECEIVED, source="websocket", data={"text": text})
+                        engine.state_machine.process_event(event)
+                        engine.dispatcher.publish(event)
+                elif msg_type == "mode_change" and engine:
+                    mode = data.get("data", {}).get("mode")
+                    engine.current_mode = mode
             except json.JSONDecodeError:
                 logging.warning("收到的不是有效的 JSON 数据")
                 

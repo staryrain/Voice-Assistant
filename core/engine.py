@@ -38,6 +38,9 @@ class AssistantEngine:
         self.temp_audio_input = "temp_input.wav"
         self.temp_audio_output = "temp_output.mp3"
         
+        # 当前交互模式 (voice 或 text)
+        self.current_mode = "voice"
+        
         # 注册状态机事件处理
         self._register_state_event_handlers()
         
@@ -325,7 +328,10 @@ class AssistantEngine:
             ))
             return
 
-        self.state_machine.process_event(event)
+        # 文本模式下，不通过状态机转换到 SPEAKING 状态，保持在 PROCESSING 
+        # 等待后续的 AUDIO_OUTPUT_END 事件直接跳回 IDLE
+        if getattr(self, "current_mode", "voice") != "text":
+            self.state_machine.process_event(event)
         
         # 解析是否包含音乐播放指令 [PLAY_MUSIC:歌名]
         match = re.search(r'[\[【]\s*PLAY_MUSIC\s*:\s*(.*?)\s*[\]】]', text)
@@ -338,11 +344,19 @@ class AssistantEngine:
 
         # 触发 TTS
         if text:
-            self.dispatcher.publish(create_event(
-                EventType.TTS_START,
-                source="engine",
-                data={"text": text}
-            ))
+            if getattr(self, "current_mode", "voice") == "text":
+                # 如果是纯文本模式，跳过 TTS，直接发布音频结束事件
+                logger.info("纯文本模式，跳过 TTS")
+                self.dispatcher.publish(create_event(
+                    EventType.AUDIO_OUTPUT_END,
+                    source="engine"
+                ))
+            else:
+                self.dispatcher.publish(create_event(
+                    EventType.TTS_START,
+                    source="engine",
+                    data={"text": text}
+                ))
         elif self.pending_music:
             # 如果没有文本直接开始播放音乐
             self.dispatcher.publish(create_event(
@@ -406,6 +420,10 @@ class AssistantEngine:
         if hasattr(self, 'listening_start_time'):
             delattr(self, 'listening_start_time')
         
+        # 文本模式下不启动唤醒词监听
+        if getattr(self, "current_mode", "voice") == "text":
+            return
+            
         # 在 IDLE 状态下启动轻量级的唤醒词监听
         def _wake_word_task():
             try:
@@ -438,6 +456,11 @@ class AssistantEngine:
     def _on_enter_listening(self):
         """进入监听状态"""
         logger.info("--- 状态切换: LISTENING ---")
+        
+        # 文本模式下不启动语音录制
+        if getattr(self, "current_mode", "voice") == "text":
+            return
+            
         self.dispatcher.publish(create_event(
             EventType.AUDIO_INPUT_START,
             source="state_machine"
