@@ -20,8 +20,8 @@
       width: 256px;
       height: 256px;
       cursor: move;
-      -webkit-app-region: no-drag;
       user-select: none;
+      -webkit-user-drag: none;
     }
 
     /* 文本模式 UI */
@@ -172,7 +172,7 @@
   </style>
 </head>
 <body>
-  <img id="pet" src="../funingna_skin/idle1.gif" alt="pet" />
+  <img id="pet" src="../funingna_skin/idle1.gif" alt="pet" draggable="false" />
 
   <div id="text-mode-container">
     <div id="text-header">

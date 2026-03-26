@@ -31,8 +31,14 @@ function createWindow() {
   ipcMain.on('resize-window', (event, width, height) => {
     mainWindow.setSize(width, height);
   });
+
+  ipcMain.on('window-moving', (event, { mouseX, mouseY }) => {
+    const { x, y } = screen.getCursorScreenPoint();
+    mainWindow.setPosition(x - mouseX, y - mouseY);
+  });
 }
 
+const { screen } = require('electron');
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', function () {

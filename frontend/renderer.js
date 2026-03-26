@@ -164,23 +164,25 @@ let mouseOffsetX = 0;
 let mouseOffsetY = 0;
 
 petImg.addEventListener("mousedown", (e) => {
+  if (e.button !== 0) return; // 仅左键点击支持拖拽
   isDragging = true;
-  // 记录鼠标相对窗口的偏移量
+  // 记录鼠标相对窗口内部的偏移量
   mouseOffsetX = e.clientX;
   mouseOffsetY = e.clientY;
 });
 
-document.addEventListener("mouseup", () => {
-  isDragging = false;
+window.addEventListener("mousemove", (e) => {
+  if (isDragging) {
+    // 将鼠标相对于窗口的偏移量传给主进程，由主进程根据鼠标当前全局坐标移动窗口
+    ipcRenderer.send('window-moving', {
+      mouseX: mouseOffsetX,
+      mouseY: mouseOffsetY
+    });
+  }
 });
 
-document.addEventListener("mousemove", (e) => {
-  if (isDragging) {
-    // electron 的 screen 坐标
-    const { screenX, screenY } = e;
-    // 移动窗口到鼠标当前屏幕位置减去按下的偏移量
-    window.moveTo(screenX - mouseOffsetX, screenY - mouseOffsetY);
-  }
+window.addEventListener("mouseup", () => {
+  isDragging = false;
 });
 
 // 双击可以手动触发一次唤醒（通过 WebSocket 往上发指令的话，需要通过前面建立的 ws 对象）
