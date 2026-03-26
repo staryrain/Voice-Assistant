@@ -20,7 +20,6 @@ let currentState = 'idle';
 let idleInterval = null;
 
 const petImg = document.getElementById("pet");
-const debugPanel = document.getElementById("debug-panel");
 let lastBackendState = null;
 let lastEventType = null;
 
@@ -45,18 +44,6 @@ function backendStateToAnimState(state) {
   }
 }
 
-function updateDebugPanel() {
-  if (!debugPanel) return;
-  const mismatch = lastBackendState && lastBackendState !== currentState;
-  debugPanel.textContent = [
-    `FSM: ${lastBackendState ?? "-"}`,
-    `Anim: ${currentState}`,
-    `Event: ${lastEventType ?? "-"}`,
-    `Mismatch: ${mismatch ? "YES" : "NO"}`
-  ].join("\n");
-}
-
-// 状态设置函数
 function setState(state) {
   if (state === currentState) return; // 状态未改变
   currentState = state;
@@ -70,8 +57,6 @@ function setState(state) {
   } else {
     petImg.src = animations[state] || animations["idle"][0];
   }
-
-  updateDebugPanel();
 }
 
 // 播放随机的 Idle 动画
@@ -83,7 +68,6 @@ function playRandomIdle() {
 
 // 初始化状态
 setState('idle');
-updateDebugPanel();
 
 let isTextMode = false;
 let globalWs = null; // 用于在其他地方发送消息
@@ -96,7 +80,6 @@ function connectWebSocket() {
   ws.onopen = () => {
     console.log("WebSocket connected to backend");
     lastEventType = "ws_open";
-    updateDebugPanel();
   };
 
   ws.onmessage = (event) => {
@@ -118,7 +101,6 @@ function connectWebSocket() {
       const animState = backendStateToAnimState(lastBackendState);
       if (animState) {
         setState(animState);
-        updateDebugPanel();
         return;
       }
       
@@ -156,7 +138,6 @@ function connectWebSocket() {
           break;
       }
 
-      updateDebugPanel();
     } catch (err) {
       console.error("Error parsing message:", err);
     }
@@ -165,14 +146,12 @@ function connectWebSocket() {
   ws.onclose = () => {
     console.log("WebSocket disconnected. Reconnecting in 3 seconds...");
     lastEventType = "ws_close";
-    updateDebugPanel();
     setTimeout(connectWebSocket, 3000);
   };
 
   ws.onerror = (err) => {
     console.error("WebSocket error:", err);
     lastEventType = "ws_error";
-    updateDebugPanel();
   };
 }
 
@@ -240,7 +219,6 @@ window.addEventListener('click', () => {
 menuTextMode.addEventListener('click', () => {
   isTextMode = true;
   petImg.style.display = 'none';
-  if(debugPanel) debugPanel.style.display = 'none';
   textModeContainer.style.display = 'flex';
   // 调整窗口大小，长宽比1:2
   ipcRenderer.send('resize-window', 350, 700);
@@ -257,7 +235,6 @@ menuTextMode.addEventListener('click', () => {
 closeTextBtn.addEventListener('click', () => {
   isTextMode = false;
   petImg.style.display = 'block';
-  if(debugPanel) debugPanel.style.display = 'block';
   textModeContainer.style.display = 'none';
   // 恢复原窗口大小
   ipcRenderer.send('resize-window', 400, 400);

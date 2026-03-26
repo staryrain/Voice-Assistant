@@ -6,42 +6,22 @@
   <style>
     body {
       margin: 0;
-      background: transparent;
+      padding: 0;
       overflow: hidden;
+      background: transparent;
+      width: 100vw;
+      height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
-      -webkit-app-region: no-drag; /* We handle drag manually */
-      position: relative;
     }
 
     #pet {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      -webkit-user-drag: none;
-      cursor: grab;
-    }
-    
-    #pet:active {
-      cursor: grabbing;
-    }
-
-    #debug-panel {
-      position: fixed;
-      left: 10px;
-      top: 10px;
-      z-index: 9999;
-      padding: 8px 10px;
-      border-radius: 8px;
-      background: rgba(0, 0, 0, 0.55);
-      color: #fff;
-      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      white-space: pre;
-      pointer-events: none;
+      width: 256px;
+      height: 256px;
+      cursor: move;
+      -webkit-app-region: no-drag;
       user-select: none;
-      max-width: calc(100vw - 20px);
     }
 
     /* 文本模式 UI */
@@ -192,7 +172,6 @@
   </style>
 </head>
 <body>
-  <div id="debug-panel"></div>
   <img id="pet" src="../funingna_skin/idle1.gif" alt="pet" />
 
   <div id="text-mode-container">
