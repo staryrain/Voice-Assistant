@@ -17,6 +17,7 @@ import copy
 import logging
 import os
 import yaml
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -79,10 +80,10 @@ class TTSClient:
             self.header = {"Authorization": f"Bearer; {self.token}"}
         else:
             local_config = tts_config.get("local", {})
-            self.engine = local_config.get("engine", "pyttsx3")
-            self.voice_id = local_config.get("voice_id", "")
-            self.rate = local_config.get("rate", 150)
-            self.volume = local_config.get("volume", 1.0)
+            self.base_url = local_config.get("base_url", "http://127.0.0.1:5000")
+            self.character = local_config.get("character", "fufuvoice")
+            self.emotion = local_config.get("emotion", "default")
+            self.language = local_config.get("language", "多语种混合")
 
     async def _synthesize_async(self, text: str, output_path: str, voice_type: str = None):
         if self.mode == "server":
@@ -122,7 +123,37 @@ class TTSClient:
             raise
 
     async def _synthesize_local(self, text: str, output_path: str):
-        raise NotImplementedError("Local TTS not implemented yet. Please implement _synthesize_local method.")
+        import aiohttp
+        data = {
+            "cha_name": self.character,
+            "text": text,
+            "character_emotion": self.emotion,
+            "text_language": self.language
+        }
+        
+        logger.info(f"Local TTS request: {self.base_url}/tts with data: {data}")
+        
+        try:
+            timeout = aiohttp.ClientTimeout(total=30)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.post(f"{self.base_url}/tts", json=data) as response:
+                    logger.info(f"Local TTS response status: {response.status}")
+                    
+                    if response.status == 200:
+                        audio_data = await response.read()
+                        logger.info(f"Local TTS audio data size: {len(audio_data)} bytes")
+                        
+                        with open(output_path, "wb") as f:
+                            f.write(audio_data)
+                        logger.info(f"Local TTS saved to: {output_path}")
+                        return output_path
+                    else:
+                        error_text = await response.text()
+                        logger.error(f"Local TTS error: {error_text}")
+                        raise Exception(f"TTS request failed with status {response.status}")
+        except Exception as e:
+            logger.error(f"Local TTS request failed: {e}")
+            raise
 
     def _parse_response(self, res, file):
         protocol_version = res[0] >> 4

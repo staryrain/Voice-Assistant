@@ -14,12 +14,17 @@ tts:
     host: "openspeech.bytedance.com"
     url: "wss://openspeech.bytedance.com/api/v1/tts/ws_binary"
   local:
-    engine: "pyttsx3"
-    voice_id: ""
-    rate: 150
-    volume: 1.0
+    base_url: "http://127.0.0.1:5000"
+    character: "fufuvoice"
+    emotion: "default"
+    language: "多语种混合"
 
 llm:
-  base_url: "https://ark.cn-beijing.volces.com/api/v3"
-  api_key: "b6ef068e-6ae9-47f8-85d5-2ac15bf0860a"
-  model: "doubao-1-5-pro-32k-250115"
+  mode: "local" # 可选: "server" 或 "local"
+  server:
+    base_url: "https://ark.cn-beijing.volces.com/api/v3"
+    api_key: "b6ef068e-6ae9-47f8-85d5-2ac15bf0860a"
+    model: "doubao-1-5-pro-32k-250115"
+  local:
+    base_url: "http://localhost:11434"
+    model: "gpt-oss:20b"

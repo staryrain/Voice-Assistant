@@ -271,36 +271,32 @@ class AssistantEngine:
         """开始文字转语音并播放"""
         text = event.data.get("text") if event.data else None
         if not text and self.state_machine.current_state == AssistantState.SPEAKING:
-            # 如果没有传 text，可能是状态机触发的，需要从某处获取回复内容
-            # 这里简单处理，假设数据已经在事件流中传递
             return
 
         def _tts_play_task():
             logger.info("正在合成语音并播放...")
-            # 注意：TTSClient._synthesize_async 是异步的
-            # 这里为了简化，我们先直接在当前线程运行它（如果可能）或者使用事件循环
-            if self.event_loop:
-                future = asyncio.run_coroutine_threadsafe(
-                    self.tts_client._synthesize_async(text, self.temp_audio_output),
-                    self.event_loop
-                )
-                try:
-                    future.result() # 等待合成完成
-                    self.dispatcher.publish(create_event(
-                        EventType.AUDIO_OUTPUT_START,
-                        source="engine"
-                    ))
-                    self.player.play(self.temp_audio_output)
-                    self.dispatcher.publish(create_event(
-                        EventType.AUDIO_OUTPUT_END,
-                        source="engine"
-                    ))
-                except Exception as e:
-                    logger.error(f"TTS 或播放错误: {e}")
-                    self.dispatcher.publish(create_event(
-                        EventType.AUDIO_OUTPUT_END, # 即使出错也尝试回到监听状态
-                        source="engine"
-                    ))
+            logger.info(f"TTS mode: {self.tts_client.mode}, base_url: {getattr(self.tts_client, 'base_url', 'N/A')}")
+            
+            output_path = self.temp_audio_output if self.tts_client.mode == "server" else "temp_output.wav"
+            
+            try:
+                self.tts_client.synthesize(text, output_path)
+                logger.info(f"TTS synthesize completed, playing: {output_path}")
+                self.dispatcher.publish(create_event(
+                    EventType.AUDIO_OUTPUT_START,
+                    source="engine"
+                ))
+                self.player.play(output_path)
+                self.dispatcher.publish(create_event(
+                    EventType.AUDIO_OUTPUT_END,
+                    source="engine"
+                ))
+            except Exception as e:
+                logger.error(f"TTS 或播放错误: {e}")
+                self.dispatcher.publish(create_event(
+                    EventType.AUDIO_OUTPUT_END,
+                    source="engine"
+                ))
         
         threading.Thread(target=_tts_play_task, daemon=True).start()
 
