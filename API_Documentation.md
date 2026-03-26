@@ -80,16 +80,20 @@
 **文件路径**: `llm/adapter.py`
 
 #### 类 `LLMClient`
-封装了与大语言模型 (LLM) 的交互逻辑，包含人设管理。
-*   **`chat(self, user_input: str) -> str`**: 发送用户输入并获取 AI 回复。自动维护对话历史。
+封装了与大语言模型 (LLM) 的交互逻辑，包含人设管理。支持服务器模式（如火山引擎）与本地模式（对接本地 Ollama 服务）。
+*   **`chat(self, user_input: str) -> str`**: 发送用户输入并获取 AI 回复。根据 `config/settings.yaml` 中的配置决定请求线上 API 还是本地 Ollama 服务，并自动维护对话历史。
+*   **`_chat_server(self, user_input: str) -> str`**: 内部方法，处理与线上 OpenAI 兼容接口的交互。
+*   **`_chat_local(self, user_input: str) -> str`**: 内部方法，处理与本地 Ollama 服务（如 `/api/chat`）的交互。
 *   **`reset_history(self)`**: 重置对话历史，恢复到初始人设状态。
 
 ### 2.4 语音合成 (TTS - Text to Speech)
 **文件路径**: `audio/output/tts.py`
 
 #### 类 `TTSClient`
-封装了语音合成服务的客户端，使用火山引擎 TTS 服务。
-*   **`synthesize(self, text: str, output_path: str = "output.mp3", voice_type=...) -> str`**: 将文本合成为语音并保存到文件。
+封装了语音合成服务的客户端。支持服务器模式（如火山引擎 TTS 服务）与本地模式（如对接本地 GPT-SoVITS 推理后端）。
+*   **`synthesize(self, text: str, output_path: str = "output.mp3", voice_type=...) -> str`**: 将文本合成为语音并保存到文件。根据 `config/settings.yaml` 中的 `tts.mode` 决定使用线上服务还是本地服务。
+*   **`_synthesize_server(self, text: str, output_path: str, voice_type: str = None)`**: 内部方法，异步请求线上 WebSocket TTS 接口。
+*   **`_synthesize_local(self, text: str, output_path: str)`**: 内部方法，异步请求本地 HTTP TTS 接口（默认使用 `aiohttp`，生成 WAV 格式音频）。
 
 ### 2.5 音频播放 (Audio Player)
 **文件路径**: `audio/output/player.py`

@@ -27,4 +27,4 @@ llm:
     model: "doubao-1-5-pro-32k-250115"
   local:
     base_url: "http://localhost:11434"
-    model: "gpt-oss:20b"
+    model: "qwen3.5:cloud"
