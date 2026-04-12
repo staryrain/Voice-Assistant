@@ -1,0 +1,30 @@
+stt:
+  app_key: "YOUR_APP_KEY"
+  access_key: "YOUR_ACCESS_KEY"
+  url: ""
+  segment_duration: 
+
+tts:
+  mode: "server"
+  server:
+    appid: "YOUR_APP_ID"
+    token: "YOUR_TOKEN"
+    cluster: "volcano_icl"
+    voice_type: "YOUR_VOICE_TYPE"
+    host: ""
+    url: ""
+  local:
+    base_url: "http://127.0.0.1:5000"
+    character: "fufuvoice"
+    emotion: "default"
+    language: "多语种混合"
+
+llm:
+  mode: "server"
+  server:
+    base_url: ""
+    api_key: "YOUR_API_KEY"
+    model: "doubao-1-5-pro-32k-250115"
+  local:
+    base_url: "http://localhost:11434"
+    model: ""

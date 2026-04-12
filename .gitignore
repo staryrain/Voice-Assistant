@@ -25,6 +25,9 @@ logs/
 .env.local
 .env.*.local
 
+# 忽略配置文件（包含敏感信息）
+config/settings.yaml
+
 # 忽略Node.js模块
 node_modules/
 npm-debug.log
