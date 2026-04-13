@@ -36,3 +36,12 @@ frontend/node_modules/
 
 # 忽略tools文件夹
 tools/
+
+# 临时音频文件
+temp_input.wav
+temp_output.mp3
+test_submit.mp3
+test_submit.wav
+test_wakeresponse.mp3
+test_tts.mp3
+test_recording.mp3
